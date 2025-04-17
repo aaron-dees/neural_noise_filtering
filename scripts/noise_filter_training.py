@@ -4,6 +4,7 @@ sys.path.append('../')
 # Internal Imports
 from models.noise_filtering.noise_filtering_vae import SpectralVAE_v1
 from models.dataloaders.dataloaders import AudioDataset, AudioDataset_old
+from models.dataloaders.customAudioDataset import CustomAudioDataset, collate_fn
 from models.loss_functions.loss_functions import compute_kld, spectral_distances, envelope_distance, calc_reconstruction_loss
 from scripts.configs.noise_filtering_config import *
 from utils.utilities import export_latents, init_beta
@@ -73,13 +74,27 @@ if __name__ == "__main__":
 
 
     audio_dataset = AudioDataset(dataset_path=AUDIO_PATHS, audio_size_samples=AUDIO_SAMPLE_SIZE, min_batch_size=BATCH_SIZE, sampling_rate=SAMPLE_RATE, device=DEVICE)
+    custom_audio_dataset = CustomAudioDataset(csv_path=AUDIO_PATHS, sample_rate=SAMPLE_RATE, channels=1, tensor_cut=AUDIO_SAMPLE_SIZE) 
+
     # audio_dataset = AudioDataset_old(dataset_path=AUDIO_DIR, audio_size_samples=AUDIO_SAMPLE_SIZE, min_batch_size=BATCH_SIZE, sampling_rate=SAMPLE_RATE, device=DEVICE)
     n_samples = len(audio_dataset)
 
     n_train = int(n_samples*TRAIN_SPLIT)
-    train_dataset,test_dataset = torch.utils.data.random_split(audio_dataset, [n_train, n_samples-n_train])
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=False)
-    val_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
+    # train_dataset,test_dataset = torch.utils.data.random_split(audio_dataset, [n_train, n_samples-n_train])
+    trainset, testset = torch.utils.data.random_split(custom_audio_dataset, [n_train, n_samples-n_train])
+    # train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=False)
+    # val_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
+    train_dataloader = torch.utils.data.DataLoader(
+        trainset,
+        batch_size=BATCH_SIZE,
+        shuffle=True, collate_fn=collate_fn,
+        pin_memory=True)
+    val_dataloader = torch.utils.data.DataLoader(
+        testset,
+        batch_size=BATCH_SIZE,
+        shuffle=False, collate_fn=collate_fn,
+        pin_memory=True)
+        
     print("-----Dataset Loaded-----")
     # TODO Make a test dataloader
 
