@@ -16,7 +16,7 @@ import utils.dsp_components as dsp
 import heapq
 
 # TODO Should really pass these as variables to be safer
-from scripts.configs.noise_filtering_config import NORMALIZE_OLA, RECONSTRUCTION_SAVE_DIR, SAMPLE_RATE, NUM_CC
+from scripts.configs.noise_filtering_config import NORMALIZE_OLA, RECONSTRUCTION_SAVE_DIR, SAMPLE_RATE, NOISE_SYNTH
 # from scripts.configs.hyper_parameters_waveform import NORMALIZE_OLA, RECONSTRUCTION_SAVE_DIR, SAMPLE_RATE
 
 
@@ -78,68 +78,31 @@ def plot_latents(train_latents,train_labels, classes,export_dir):
     plt.close("all")
 
 # Compute the latens
-def compute_latents(w_model, dataloader, l_grain, n_grains, hop_size, batch_size, device):
+def compute_latents(w_model, dataloader, batch_size, device):
     tmploader = torch.utils.data.DataLoader(dataloader.dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     dataset_latents = []
-    dataset_labels = []
-    for batch in tmploader:
+    # dataset_labels = []
+    for waveform in tmploader:
         with torch.no_grad():
-            waveform, labels = batch
-            bs = waveform.shape[0]
             waveform = waveform.to(device)
 
-            # ---------- Turn Waveform into grains ----------
-            ola_window = signal.hann(l_grain,sym=False)
-            ola_windows = torch.from_numpy(ola_window).unsqueeze(0).repeat(n_grains,1).type(torch.float32)
-            ola_windows[0,:l_grain//2] = ola_window[l_grain//2] # start of 1st grain is not windowed for preserving attacks
-            ola_windows[-1,l_grain//2:] = ola_window[l_grain//2] # end of last grain is not wondowed to preserving decays
-            ola_windows = nn.Parameter(ola_windows,requires_grad=False).to(device)
-
-            slice_kernel = nn.Parameter(torch.eye(l_grain).unsqueeze(1),requires_grad=False).to(device)
-            mb_grains = F.conv1d(waveform.unsqueeze(1),slice_kernel,stride=hop_size,groups=1,bias=None)
-            mb_grains = mb_grains.permute(0,2,1)
-            bs = mb_grains.shape[0]
-            # repeat the overlap add windows acrosss the batch and apply to the grains
-            mb_grains = mb_grains*(ola_windows.unsqueeze(0).repeat(bs,1,1))
-            grain_fft = torch.fft.rfft(mb_grains)
-            # ---------- Turn Waveform into grains END ----------
-
-            # ---------- Get CCs, or MFCCs and invert ----------
-            # CCs
-            grain_db = 20*dsp.safe_log10(torch.abs(grain_fft))
-            cepstral_coeff = dct.dct(grain_db)
-            # Take the first n_cc cepstral coefficients
-            cepstral_coeff[:, :,NUM_CC:] = 0
-            inv_cep_coeffs = 10**(dct.idct(cepstral_coeff) / 20)
-
-            # MFCCs  - use librosa function as they are more reliable
-            # grain_fft = grain_fft.permute(0,2,1)
-            # grain_mel= safe_log10(torch.from_numpy((librosa.feature.melspectrogram(S=np.abs(grain_fft.cpu().numpy())**2, sr=SAMPLE_RATE, n_fft=GRAIN_LENGTH, n_mels=NUM_MELS))))
-            # mfccs = dct.dct(grain_mel)
-            # inv_mfccs = dct.idct(mfccs).cpu().numpy()       
-            # inv_mfccs = torch.from_numpy(librosa.feature.inverse.mel_to_stft(M=10**inv_mfccs, sr=SAMPLE_RATE, n_fft=GRAIN_LENGTH)).to(DEVICE)
-            # inv_mfccs = inv_mfccs.permute(0,2,1)
-
-            # ---------- Get CCs, or MFCCs and invert END ----------
-
             # ---------- Run Model ----------
-            mu = w_model.encode(inv_cep_coeffs)["mu"].cpu()
-            # mu of shape [bs*n_grains,z_dim]
-            mu = mu.reshape(bs,n_grains,w_model.z_dim)
+            mu = w_model.encode(waveform, noise_synth=NOISE_SYNTH)["mu"].cpu()
             dataset_latents.append(mu)
-            dataset_labels.append(labels)
+            # dataset_labels.append(labels)
     dataset_latents = torch.cat(dataset_latents,0)
-    dataset_labels = torch.cat(dataset_labels,0)
+    # dataset_labels = torch.cat(dataset_labels,0)
     # labels not so important now, but will be in future
     # print("--- Exported dataset sizes:\t",dataset_latents.shape,dataset_labels.shape)
     print("--- Exported dataset sizes:\t",dataset_latents.shape)
-    return dataset_latents,dataset_labels
+    return dataset_latents
+    # return dataset_latents,dataset_labels
 
 # Export the latents
-def export_latents(w_model, train_dataloader, test_dataloader, l_grain, n_grains, hop_size, batch_size, device):
-    train_latents,train_labels = compute_latents(w_model,train_dataloader, l_grain, n_grains, hop_size, batch_size, device)
-    test_latents,test_labels = compute_latents(w_model,test_dataloader, l_grain, n_grains, hop_size, batch_size, device)
-    return train_latents,train_labels,test_latents,test_labels
+def export_latents(w_model, train_dataloader, val_dataloader, batch_size, device):
+    train_latents = compute_latents(w_model,train_dataloader, batch_size, device)
+    test_latents= compute_latents(w_model,val_dataloader, batch_size, device)
+    return train_latents,test_latents
 
 # Safe log for cases where x is very close to zero
 def safe_log(x, eps=1e-7):

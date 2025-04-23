@@ -72,11 +72,11 @@ class CustomAudioDataset(torch.utils.data.Dataset):
                 waveform = waveform[:, start:start+self.tensor_cut] # cut tensor
                 if self.channels == 1:
                     waveform = waveform.squeeze()
-                return waveform, sample_rate
+                return waveform
             else:
                 if self.channels == 1:
                     waveform = waveform.squeeze()
-                return waveform, sample_rate
+                return waveform
 
 
 def pad_sequence(batch):
@@ -90,7 +90,7 @@ def pad_sequence(batch):
 def collate_fn(batch):
     tensors = []
 
-    for waveform, _ in batch:
+    for waveform in batch:
         tensors += [waveform]
 
     # Group the list of tensors into a batched tensor
