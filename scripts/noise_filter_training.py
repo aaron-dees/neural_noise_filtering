@@ -73,17 +73,17 @@ frechet = FrechetAudioDistance(
 if __name__ == "__main__":
 
 
-    audio_dataset = AudioDataset(dataset_path=AUDIO_PATHS, audio_size_samples=AUDIO_SAMPLE_SIZE, min_batch_size=BATCH_SIZE, sampling_rate=SAMPLE_RATE, device=DEVICE)
-    custom_audio_dataset = CustomAudioDataset(csv_path=AUDIO_PATHS, sample_rate=SAMPLE_RATE, channels=1, tensor_cut=AUDIO_SAMPLE_SIZE) 
-
+    # audio_dataset = AudioDataset(dataset_path=AUDIO_PATHS, audio_size_samples=AUDIO_SAMPLE_SIZE, min_batch_size=BATCH_SIZE, sampling_rate=SAMPLE_RATE, device=DEVICE)
+    # n_samples = len(audio_dataset)
     # audio_dataset = AudioDataset_old(dataset_path=AUDIO_DIR, audio_size_samples=AUDIO_SAMPLE_SIZE, min_batch_size=BATCH_SIZE, sampling_rate=SAMPLE_RATE, device=DEVICE)
-    n_samples = len(audio_dataset)
-
-    n_train = int(n_samples*TRAIN_SPLIT)
     # train_dataset,test_dataset = torch.utils.data.random_split(audio_dataset, [n_train, n_samples-n_train])
-    trainset, testset = torch.utils.data.random_split(custom_audio_dataset, [n_train, n_samples-n_train])
     # train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=False)
     # val_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
+
+    custom_audio_dataset = CustomAudioDataset(csv_path=AUDIO_PATHS, sample_rate=SAMPLE_RATE, channels=1, tensor_cut=AUDIO_SAMPLE_SIZE) 
+    n_samples = len(custom_audio_dataset)
+    n_train = int(n_samples*TRAIN_SPLIT)
+    trainset, testset = torch.utils.data.random_split(custom_audio_dataset, [n_train, n_samples-n_train])
     train_dataloader = torch.utils.data.DataLoader(
         trainset,
         batch_size=BATCH_SIZE,
